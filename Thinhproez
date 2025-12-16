@@ -1,0 +1,157 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UIS = game:GetService("UserInputService")
+local Lighting = game:GetService("Lighting")
+local Workspace = game:GetService("Workspace")
+
+local pl = Players.LocalPlayer
+local ch, hum, hrp
+local SECRET_KEY = "thinh"
+local omniMode = false
+
+-- ===== HỆ THỐNG TÍNH NĂNG TỔNG LỰC =====
+local omniConfig = {
+    flySpeed = 150, 
+    flingForce = 1e10, 
+    isKillAll = false,
+    isAntiRagdoll = true,
+    isAutoToxic = false, -- AI tự động cà khịa
+    isServerHop = false,
+    viewTarget = nil
+}
+
+local conns = {}
+
+local function setup(newCh)
+    ch = newCh or pl.Character or pl.CharacterAdded:Wait()
+    hum = ch:WaitForChild("Humanoid")
+    hrp = ch:WaitForChild("HumanoidRootPart")
+    -- Anti-Ragdoll & God State
+    hum.BreakJointsOnDeath = false
+    hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+end
+pl.CharacterAdded:Connect(setup); setup()
+
+-- ===== AI CHAT CÀ KHỊA (TOXIC SYSTEM) =====
+local toxicLines = {
+    "Vũ trụ này quá nhỏ bé đối với tôi và Thinh!",
+    "Mục tiêu đã bị xóa sổ khỏi dòng thời gian.",
+    "Đừng cố chống lại thực thể Omni.",
+    "Server này hiện thuộc quyền sở hữu của V8 AI.",
+    "Phát hiện sinh vật yếu đuối, đang tiến hành thanh trừng..."
+}
+
+local function aiToxic()
+    if omniConfig.isAutoToxic then
+        local msg = toxicLines[math.random(1, #toxicLines)]
+        game:GetService("ReplicatedStorage").DefaultChatSystemChatEvents.SayMessageRequest:FireServer(msg, "All")
+    end
+end
+
+-- ===== CHỨC NĂNG SIÊU CẤP =====
+
+-- 1. Kill All (Quét sạch server)
+local function killAll()
+    omniConfig.isKillAll = not omniConfig.isKillAll
+    if omniConfig.isKillAll then
+        conns["KillAll"] = RunService.Heartbeat:Connect(function()
+            for _, p in pairs(Players:GetPlayers()) do
+                if p ~= pl and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                    hrp.CFrame = p.Character.HumanoidRootPart.CFrame
+                    hrp.Velocity = Vector3.new(0, omniConfig.flingForce, 0)
+                end
+            end
+        end)
+    else
+        if conns["KillAll"] then conns["KillAll"]:Disconnect() end
+    end
+    return omniConfig.isKillAll
+end
+
+-- 2. Spectate (Theo dõi mục tiêu)
+local function view(targetName)
+    for _, p in pairs(Players:GetPlayers()) do
+        if p.Name:lower():find(targetName) then
+            Workspace.CurrentCamera.CameraSubject = p.Character.Humanoid
+            return "Đang quan sát: " .. p.Name
+        end
+    end
+end
+
+-- ===== BỘ NÃO OMNIVERSE =====
+local function aiOmni(input)
+    local t = input:lower()
+    if t == SECRET_KEY then omniMode = true; return "🌌 OMNIVERSE: Đã mở khóa quyền năng tối thượng." end
+    if not omniMode then return "❌ Cần Key 'thinh'." end
+
+    if t:find("killall") or t:find("diệt hết") then
+        local s = killAll()
+        return s and "🌌 AI: Đang thanh trừng toàn bộ server..." or "🌌 AI: Đã dừng sát phạt."
+    end
+
+    if t:find("chat") or t:find("khịa") then
+        omniConfig.isAutoToxic = not omniConfig.isAutoToxic
+        return "🌌 AI Toxic: " .. (omniConfig.isAutoToxic and "BẬT" or "TẮT")
+    end
+
+    if t:find("xem") or t:find("view") then
+        local name = t:gsub("xem ", ""):gsub("view ", "")
+        return view(name)
+    end
+
+    if t:find("hop") or t:find("đổi server") then
+        local Http = game:GetService("HttpService")
+        local TPS = game:GetService("TeleportService")
+        local Servers = Http:JSONDecode(game:HttpGet("https://games.roblox.com/v1/games/"..game.PlaceId.."/servers/Public?sortOrder=Asc&limit=100"))
+        for _, s in pairs(Servers.data) do
+            if s.playing < s.maxPlayers and s.id ~= game.JobId then
+                TPS:TeleportToPlaceInstance(game.PlaceId, s.id, pl)
+            end
+        end
+    end
+
+    return "🌌 Lệnh: killall, chat, xem [tên], hop, void, warp"
+end
+
+-- ===== GIAO DIỆN ĐA VŨ TRỤ (130PX - SIÊU MỎNG) =====
+local gui = Instance.new("ScreenGui", pl.PlayerGui); gui.ResetOnSpawn = false
+local menu = Instance.new("Frame", gui)
+menu.Size = UDim2.new(0, 580, 0, 130); menu.Position = UDim2.new(0.5, -290, 0.5, -65)
+menu.BackgroundColor3 = Color3.fromRGB(0, 0, 0); menu.Visible = false; Instance.new("UICorner", menu)
+Instance.new("UIStroke", menu).Color = Color3.fromRGB(255, 0, 0) -- Viền đỏ cảnh báo
+
+local scroll = Instance.new("ScrollingFrame", menu)
+scroll.Size = UDim2.new(0.4, 0, 0.85, 0); scroll.Position = UDim2.new(0.02, 0, 0.07, 0); scroll.BackgroundTransparency = 1; scroll.ScrollBarThickness = 0
+Instance.new("UIListLayout", scroll).Padding = UDim.new(0, 2)
+
+local aiBox = Instance.new("Frame", menu)
+aiBox.Size = UDim2.new(0.55, 0, 0.85, 0); aiBox.Position = UDim2.new(0.43, 0, 0.07, 0); aiBox.BackgroundColor3 = Color3.fromRGB(10, 10, 10); Instance.new("UICorner", aiBox)
+
+local log = Instance.new("ScrollingFrame", aiBox)
+log.Size = UDim2.new(1, -10, 0.7, 0); log.BackgroundTransparency = 1; Instance.new("UIListLayout", log)
+
+local input = Instance.new("TextBox", aiBox)
+input.Size = UDim2.new(1, 0, 0.3, 0); input.Position = UDim2.new(0, 0, 0.7, 0); input.BackgroundColor3 = Color3.fromRGB(30, 0, 0); input.TextColor3 = Color3.new(1, 0, 0); input.Text = "LỆNH OMNI..."
+
+local function b(txt, f)
+    local btn = Instance.new("TextButton", scroll)
+    btn.Size = UDim2.new(1, 0, 0, 20); btn.Text = txt; btn.BackgroundColor3 = Color3.fromRGB(20, 20, 20); btn.TextColor3 = Color3.new(1,0,0); btn.Font = Enum.Font.Code; Instance.new("UICorner", btn)
+    btn.MouseButton1Click:Connect(f)
+end
+
+b("🔥 KILL ALL SERVER", function() aiOmni("killall") end)
+b("💬 AUTO TOXIC (ON/OFF)", function() aiOmni("chat") end)
+b("🚀 SERVER HOP", function() aiOmni("hop") end)
+b("👁️ UNVIEW", function() Workspace.CurrentCamera.CameraSubject = hum end)
+b("🛡️ ANTI-ADMIN", function() aiOmni("admin") end)
+
+input.FocusLost:Connect(function(e)
+    if e then
+        local res = aiOmni(input.Text)
+        local l = Instance.new("TextLabel", log); l.Size = UDim2.new(1,0,0,15); l.Text = res; l.TextColor3 = Color3.new(1,0,0); l.BackgroundTransparency = 1; l.TextXAlignment = "Left"; l.TextSize = 10
+        input.Text = ""
+    end
+end)
+
+local v8 = Instance.new("TextButton", gui); v8.Size = UDim2.new(0, 40, 0, 40); v8.Position = UDim2.new(0, 10, 0.1, 0); v8.Text = "🔥"; v8.BackgroundColor3 = Color3.fromRGB(255, 0, 0); Instance.new("UICorner", v8).CornerRadius = UDim.new(1,0)
+v8.MouseButton1Click:Connect(function() menu.Visible = not menu.Visible end)
